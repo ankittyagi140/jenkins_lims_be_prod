@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         VM_HOST = '192.168.1.50'  // TODO: Update with production VM host
-        DEPLOY_PATH = '/opt/lims'
+        DEPLOY_PATH = '/opt/lims/prod'
         REPO_URL = 'https://github.com/ankittyagi140/euroasia_lims_be.git'
         API_GATEWAY_PORT = '8080'
         API_GATEWAY_HTTPS_PORT = '443'
@@ -20,7 +20,7 @@ pipeline {
             steps {
                 checkout([
                     $class: 'GitSCM',
-                    branches: [[name: '*/main']],  // TODO: Update branch if production uses different branch
+                    branches: [[name: '*/release']],  // Production deployments use release branch
                     userRemoteConfigs: [[
                         url: "${REPO_URL}",
                         credentialsId: 'github-pat'
