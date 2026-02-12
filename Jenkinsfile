@@ -2,11 +2,10 @@ pipeline {
     agent any
 
     environment {
-        VM_HOST = '192.168.1.50'  // TODO: Update with production VM host
-        DEPLOY_PATH = '/opt/lims/prod'
+        VM_HOST = '192.168.1.50'
+        DEPLOY_PATH = '/opt/lims'
         REPO_URL = 'https://github.com/ankittyagi140/euroasia_lims_be.git'
         API_GATEWAY_PORT = '8080'
-        API_GATEWAY_HTTPS_PORT = '443'
         MAX_HEALTH_CHECK_RETRIES = '30'
         HEALTH_CHECK_INTERVAL = '5'
     }
@@ -425,20 +424,18 @@ SCRIPT_EOF'''
                 script {
                     def retries = 0
                     while (retries < env.MAX_HEALTH_CHECK_RETRIES.toInteger()) {
-                        // Try HTTPS first, fallback to HTTP
                         def status = sh(
-                            script: "curl -sfk https://${VM_HOST}:${API_GATEWAY_HTTPS_PORT}/health || curl -sf http://${VM_HOST}:${API_GATEWAY_PORT}/health",
+                            script: "curl -sf http://${VM_HOST}:${API_GATEWAY_PORT}/health",
                             returnStatus: true
                         )
                         if (status == 0) {
-                            echo "✅ API Gateway healthy"
+                            echo "API Gateway healthy"
                             return
                         }
                         retries++
-                        echo "Health check attempt ${retries}/${env.MAX_HEALTH_CHECK_RETRIES} failed, retrying..."
                         sleep env.HEALTH_CHECK_INTERVAL.toInteger()
                     }
-                    error "❌ Health checks failed after ${env.MAX_HEALTH_CHECK_RETRIES} attempts"
+                    error "Health checks failed"
                 }
             }
         }
@@ -463,11 +460,9 @@ STATUS_EOF
     post {
         success {
             echo '✅ Production deployment completed successfully'
-            // TODO: Add notification (email, Slack, etc.) on success
         }
         failure {
             echo '❌ Production deployment failed'
-            // TODO: Add notification (email, Slack, etc.) on failure
         }
         always {
             echo 'Pipeline finished'
