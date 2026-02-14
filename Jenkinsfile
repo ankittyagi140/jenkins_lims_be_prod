@@ -77,7 +77,7 @@ pipeline {
                     # Force remove old containers with same names if they exist
                     docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" down --remove-orphans || true
                     # Remove any containers with conflicting names (from old deployments)
-                    docker rm -f lims-auth-service-prod lims-crm-prod lims-inward-prod lims-notification-prod lims-user-prod lims-sample-management-prod lims-rabbitmq-prod lims-postgres LIMS-API-Gateway-PROD 2>/dev/null || true
+                    docker rm -f lims-auth-service-prod lims-crm-prod lims-inward-prod lims-notification-prod lims-user-prod lims-sample-management-prod lims-rabbitmq-prod lims-postgres lims-pgadmin-prod LIMS-API-Gateway-PROD 2>/dev/null || true
                     docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" up -d --build
 
                     echo "✅ Services deployed successfully"
@@ -92,19 +92,56 @@ pipeline {
             steps {
                 script {
                     int retries = 0
+                    def gatewayHealthy = false
+                    def servicesHealthy = false
+                    
                     while (retries < env.MAX_HEALTH_CHECK_RETRIES.toInteger()) {
-                        def status = sh(
+                        // Check API Gateway health
+                        def gatewayStatus = sh(
                             script: "curl -sf http://localhost:${API_GATEWAY_PORT}/health",
                             returnStatus: true
                         )
-                        if (status == 0) {
+                        
+                        if (gatewayStatus == 0) {
+                            gatewayHealthy = true
                             echo "✅ API Gateway healthy"
-                            return
+                            
+                            // Check actual API service endpoints
+                            def crmStatus = sh(
+                                script: "curl -sf http://localhost:${API_GATEWAY_PORT}/crm/health",
+                                returnStatus: true
+                            )
+                            def authStatus = sh(
+                                script: "curl -sf http://localhost:${API_GATEWAY_PORT}/auth/health",
+                                returnStatus: true
+                            )
+                            def notificationStatus = sh(
+                                script: "curl -sf http://localhost:${API_GATEWAY_PORT}/notification/health",
+                                returnStatus: true
+                            )
+                            
+                            if (crmStatus == 0 && authStatus == 0 && notificationStatus == 0) {
+                                servicesHealthy = true
+                                echo "✅ All API services healthy (CRM, Auth, Notification)"
+                                return
+                            } else {
+                                echo "⚠️ Gateway healthy but some services not ready yet (retry ${retries + 1}/${env.MAX_HEALTH_CHECK_RETRIES})"
+                            }
+                        } else {
+                            echo "⚠️ API Gateway not ready yet (retry ${retries + 1}/${env.MAX_HEALTH_CHECK_RETRIES})"
                         }
+                        
                         retries++
                         sleep env.HEALTH_CHECK_INTERVAL.toInteger()
                     }
-                    error "❌ Health checks failed"
+                    
+                    if (!gatewayHealthy) {
+                        error "❌ API Gateway health check failed after ${env.MAX_HEALTH_CHECK_RETRIES} retries"
+                    } else if (!servicesHealthy) {
+                        error "❌ API services health check failed after ${env.MAX_HEALTH_CHECK_RETRIES} retries"
+                    } else {
+                        error "❌ Health checks failed"
+                    }
                 }
             }
         }
