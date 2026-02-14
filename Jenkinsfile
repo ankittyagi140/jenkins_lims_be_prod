@@ -74,7 +74,10 @@ pipeline {
                     export \$(grep -v '^#' .env | xargs)
 
                     echo "♻️ Restarting services (docker compose v2)"
+                    # Force remove old containers with same names if they exist
                     docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" down --remove-orphans || true
+                    # Remove any containers with conflicting names (from old deployments)
+                    docker rm -f lims-auth-service-prod lims-crm-prod lims-inward-prod lims-notification-prod lims-user-prod lims-sample-management-prod lims-rabbitmq-prod lims-postgres LIMS-API-Gateway-PROD 2>/dev/null || true
                     docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" up -d --build
 
                     echo "✅ Services deployed successfully"
