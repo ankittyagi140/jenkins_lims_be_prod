@@ -74,8 +74,8 @@ pipeline {
                     export \$(grep -v '^#' .env | xargs)
 
                     echo "♻️ Restarting services (docker compose v2)"
-                    docker compose -f "${COMPOSE_FILE}" down --remove-orphans || true
-                    docker compose -f "${COMPOSE_FILE}" up -d --build
+                    docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" down --remove-orphans || true
+                    docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" up -d --build
 
                     echo "✅ Services deployed successfully"
                 """
@@ -113,7 +113,7 @@ pipeline {
             steps {
                 sh """
                     cd "${DEPLOY_PATH}/api-gateway"
-                    docker compose -f "${COMPOSE_FILE}" ps
+                    docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" ps
                 """
             }
         }
