@@ -71,6 +71,14 @@ pipeline {
                       cp "${ENV_TEMPLATE}" .env
                     fi
 
+                    # Ensure pgAdmin port doesn't conflict with existing services on the host.
+                    # `.env` may persist across deployments; force PGADMIN_PORT to 5052.
+                    if grep -q '^PGADMIN_PORT=' .env; then
+                      sed -i 's/^PGADMIN_PORT=.*/PGADMIN_PORT=5052/' .env
+                    else
+                      echo "PGADMIN_PORT=5052" >> .env
+                    fi
+
                     export \$(grep -v '^#' .env | xargs)
 
                     echo "♻️ Restarting services (docker compose v2)"
