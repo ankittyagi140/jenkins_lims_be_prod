@@ -85,8 +85,18 @@ pipeline {
                     # Force remove old containers with same names if they exist
                     docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" down --remove-orphans || true
                     # Remove any containers with conflicting names (from old deployments)
-                    docker rm -f lims-auth-service-prod lims-crm-prod lims-inward-prod lims-notification-prod lims-user-prod lims-sample-management-prod lims-rabbitmq-prod lims-postgres lims-pgadmin-prod LIMS-API-Gateway-PROD 2>/dev/null || true
-                    docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" up -d --build
+                    docker rm -f lims-auth-service-prod lims-crm-prod lims-inward-prod lims-notification-prod lims-user-prod lims-sample-management-prod lims-test-management-prod lims-test-packages-prod lims-efiling-prod lims-rabbitmq-prod lims-postgres lims-pgadmin-prod LIMS-API-Gateway-PROD lims-minio-prod 2>/dev/null || true
+
+                    # Host is missing Docker buildx; parallel classic builds can fail with
+                    # "No such image: sha256:..." on intermediate layers (seen on api-gateway).
+                    export DOCKER_BUILDKIT=0
+                    export COMPOSE_DOCKER_CLI_BUILD=0
+                    echo "🔨 Building images (serial, classic builder)"
+                    if ! docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" build --parallel 1; then
+                      echo "⚠️ Image build failed once; retrying serial build"
+                      docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" build --parallel 1
+                    fi
+                    docker compose -p euroasia-lims-prod -f "${COMPOSE_FILE}" up -d --no-build
 
                     echo "✅ Services deployed successfully"
                 """
@@ -127,10 +137,14 @@ pipeline {
                                 script: "curl -sf http://localhost:${API_GATEWAY_PORT}/notification/health",
                                 returnStatus: true
                             )
+                            def efilingStatus = sh(
+                                script: "curl -sf http://localhost:${API_GATEWAY_PORT}/efiling/health",
+                                returnStatus: true
+                            )
                             
-                            if (crmStatus == 0 && authStatus == 0 && notificationStatus == 0) {
+                            if (crmStatus == 0 && authStatus == 0 && notificationStatus == 0 && efilingStatus == 0) {
                                 servicesHealthy = true
-                                echo "✅ All API services healthy (CRM, Auth, Notification)"
+                                echo "✅ All API services healthy (CRM, Auth, Notification, eFiling)"
                                 return
                             } else {
                                 echo "⚠️ Gateway healthy but some services not ready yet (retry ${retries + 1}/${env.MAX_HEALTH_CHECK_RETRIES})"
